@@ -26,7 +26,7 @@ app.post('/send-notification', async (req, res) => {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { toUsername, title, body, channelId } = req.body;
+  const { toUsername, title, body, channelId, type, roomCode, fromName } = req.body;
 
   if (!toUsername || !title || !body) {
     return res.status(400).json({ error: 'Missing fields' });
@@ -53,7 +53,17 @@ app.post('/send-notification', async (req, res) => {
     await messaging.send({
       token: fcmToken,
       notification: { title, body },
-      data: { channelId: channelId || 'default' },
+      data: {
+        channelId: channelId || 'default',
+        type: type || '',
+        roomCode: roomCode || '',
+        fromName: fromName || '',
+      },
+      android: {
+        notification: {
+          channelId: channelId || 'default',
+        },
+      },
     });
 
     console.log(`Notification sent to ${toUsername}`);
