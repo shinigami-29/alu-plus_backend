@@ -5,6 +5,7 @@ const cors = require('cors');
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
+const { getAuth } = require('firebase-admin/auth'); 
 const serviceAccountPath =
   process.env.RENDER ? '/etc/secrets/serviceAccountKey.json' : './serviceAccountKey.json';
 const serviceAccount = require(serviceAccountPath);
@@ -15,15 +16,24 @@ initializeApp({
 
 const db = getFirestore();
 const messaging = getMessaging();
+const authAdmin = getAuth();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 app.post('/send-notification', async (req, res) => {
-  const apiKey = req.headers['x-api-key'];
-  if (apiKey !== process.env.API_SECRET) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  // ADDED: verify the Firebase ID token is real and not expired
+  const idToken = authHeader.split('Bearer ')[1];
+  try {
+    await authAdmin.verifyIdToken(idToken);
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid token' });
   }
 
   const { toUsername, title, body, channelId, type, roomCode, fromName } = req.body;
@@ -71,8 +81,6 @@ app.post('/send-notification', async (req, res) => {
   } catch (err) {
     console.error('Send notification error:', err);
 
-    // Token expired/invalid — clean it up so future sends don't keep
-    // failing against a dead token
     if (
       err.code === 'messaging/invalid-registration-token' ||
       err.code === 'messaging/registration-token-not-registered'
